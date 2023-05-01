@@ -1,11 +1,11 @@
-from multiprocessing import Process, Lock
+from multiprocessing import Process, Semaphore
 from enum import Enum
 import random
 from time import sleep
 from colorama import Fore
 
 class ProviderModel(Process):
-    def __init__(self):
+    def __init__(self,ingredient_semaphores:list):
         super(ProviderModel, self).__init__()
 
     def run(self):
@@ -21,7 +21,7 @@ class SmokerStatus(Enum):
 
     SMOKING = 10
 
-class Ingredient(Enum):
+class IngredientTypes(Enum):
     PAPER = 0
     TOBACCO = 1
     MATCHES = 2
@@ -29,31 +29,41 @@ class Ingredient(Enum):
     FILTER = 4
 
 class SmokerModel(Process):
-    def __init__(self, ingredient:Ingredient):
+    def __init__(self, Ingredient_type:IngredientTypes, ingredient_semaphores:list):
         super(SmokerModel, self).__init__()
 
-        self.my_ingredient:Ingredient = ingredient
+        self.my_ingredient_type:IngredientTypes = IngredientTypes
         self.status:SmokerStatus = SmokerStatus.CREATED
+        self.ingredient_semaphores:list = ingredient_semaphores
 
     def run(self):
         while True:
-            #  conseguir los ingredientes
-            for ingredient in Ingredient:
-                if ingredient != self.my_ingredient:
+            #  conseguir los IngredientTypeses
+            for ingredient_type in IngredientTypes:
+                if IngredientTypes != self.my_ingredient_type:
                     pass
 
-            # si se consiguen todos los ingredientes ---> fumar
+            # si se consiguen todos los IngredientTypeses ---> fumar
             sleep(random.random()*2) # tiempo de simulacion
+
 
 class Controller():
     def __init__(self):
         self.smokers:list = self.create_smokers()
-
-    def create_smokers(self):       
+        self.ingredient_semaphores:list = self.create_smokers(self.ingredient_semaphores)
+        self.provider:ProviderModel = ProviderModel(self.ingredient_semaphores)
+    def create_smokers(self,ingredient_semaphores:list):       
         smokers=[]
-        for ingredient in Ingredient:
-            smokers.append(SmokerModel(ingredient))
+        for ingredient_type in IngredientTypes:
+            smokers.append(SmokerModel(ingredient_type))
         return smokers
+
+    def create_ingredients_semaphores(self):       
+        ingredients=[]
+        for ingredient_type in IngredientTypes:
+            ingredients.append(Semaphore(0))
+        return ingredients
+
 
     def start_smokers(self, smokers:list):
         for smoker in smokers:
@@ -67,7 +77,6 @@ def smoker_callback():
 
 def provider_callback():
     pass
-
 
 def main():
     controller = Controller()
