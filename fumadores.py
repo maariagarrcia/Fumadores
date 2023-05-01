@@ -37,14 +37,23 @@ class SmokerModel(Process):
         self.ingredient_semaphores:list = ingredient_semaphores
 
     def run(self):
+        # comprobar que ingredientes tengo
+        ingredients_acquired = [False] * len(IngredientTypes)
+        ingredients_acquired[self.my_ingredient_type] = True
         while True:
             #  conseguir los IngredientTypeses
             for ingredient_type in IngredientTypes:
-                if IngredientTypes != self.my_ingredient_type:
-                    pass
+                if ingredient_type != self.my_ingredient_type:
+                    ingredients_acquired[ingredient_type]=self.ingredient_semaphores[ingredient_type].acquire(blocking=True, timeout=random.random())
 
             # si se consiguen todos los IngredientTypeses ---> fumar
-            sleep(random.random()*2) # tiempo de simulacion
+            if all(ingredients_acquired):
+                self.status= SmokerStatus.SMOKING
+                sleep(random.random()*2) # tiempo de simulacion
+
+            for ingredient_type, ingredient_acquired in enumerate(ingredients_acquired):
+                if ingredient_acquired:
+                    self.ingredient_semaphores[ingredient_type].release()
 
 
 class Controller():
