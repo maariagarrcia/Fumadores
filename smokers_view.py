@@ -1,0 +1,2 @@
+class SmokerView():
+    pass
