@@ -1,6 +1,8 @@
 from multiprocessing import Process, Lock
-import random
 from enum import Enum
+import random
+from time import sleep
+from colorama import Fore
 
 class ProviderModel(Process):
     def __init__(self):
@@ -15,7 +17,9 @@ class SmokerStatus(Enum):
     WAITING_FOR_MATCHES = 2
     WAITING_FOR_GREEN= 3
     WAITING_FOR_FILTER = 4
-    SMOKING = 5
+    CREATED = 5
+
+    SMOKING = 10
 
 class Ingredient(Enum):
     PAPER = 0
@@ -29,20 +33,34 @@ class SmokerModel(Process):
         super(SmokerModel, self).__init__()
 
         self.my_ingredient:Ingredient = ingredient
+        self.status:SmokerStatus = SmokerStatus.CREATED
 
     def run(self):
         while True:
             #  conseguir los ingredientes
+            for ingredient in Ingredient:
+                if ingredient != self.my_ingredient:
+                    pass
 
-            # si se consiguen todos los ingredientes
-            pass
+            # si se consiguen todos los ingredientes ---> fumar
+            sleep(random.random()*2) # tiempo de simulacion
 
 class Controller():
     def __init__(self):
-        pass
+        self.smokers:list = self.create_smokers()
+
+    def create_smokers(self):       
+        smokers=[]
+        for ingredient in Ingredient:
+            smokers.append(SmokerModel(ingredient))
+        return smokers
+
+    def start_smokers(self, smokers:list):
+        for smoker in smokers:
+            smoker.start()
 
     def start(self):
-        pass
+        self.start_smokers(self.smokers)
 
 def smoker_callback():
     pass
