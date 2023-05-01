@@ -1,32 +1,31 @@
 from multiprocessing import Process, Semaphore
 from enum import Enum
-import random
+import  random
 from time import sleep
-from colorama import Fore
 
 
 class ProviderModel(Process):
-    def __init__(self, ingredient_semaphores: list):
+    def __init__(self, production_semaphore: Semaphore, ingredient_semaphores: list[Semaphore]):
         super(ProviderModel, self).__init__()
 
-        self.ingredient_semaphores: list = ingredient_semaphores
+        self.ingredient_semaphores: list[Semaphore] = ingredient_semaphores
         self.production_semaphore: Semaphore = production_semaphore
 
-    def produce_ingredient(self, ingredient_semaphores: list):
-        # desblooquear 4 ingredientea de forma aleatoria
+    def produce_ingredients(self, ingredient_semaphores: list[Semaphore]):
+        # Desbloquear cuatro ingredientes
         rest_of_ingredients: list[Semaphore] = ingredient_semaphores.copy()
-
         for i in range(0, 5):
+            # Ojo hay que evitar repetir
             ingredient_idx = random.randint(0, len(rest_of_ingredients)-1)
             rest_of_ingredients[ingredient_idx].release()
-            ingredient_semaphores.pop(ingredient_idx)
+            rest_of_ingredients.pop(ingredient_idx)
 
     def run(self):
         while True:
-            # esperar tiempo ilimitado a q  se desbloquee el semaforo de produccion
-            # al desbloquearse producir 4 ingredientes
+            # Esperar tiempo ilimitado a que se desbloquee el semaforo de producion
+            # Al desbloquearse producir 4 ingredientes
             self.production_semaphore.acquire(block=True)
-            self.produce_ingredient(self.ingredient_semaphores)
+            self.produce_ingredients(self.ingredient_semaphores)
 
 
 class SmokerStatus(Enum):
@@ -36,7 +35,6 @@ class SmokerStatus(Enum):
     WAITING_FOR_GREEN = 3
     WAITING_FOR_FILTER = 4
     RUNNING = 5
-
     SMOKING = 10
 
 
@@ -49,45 +47,52 @@ class IngredientTypes(Enum):
 
 
 class SmokerModel(Process):
-    def __init__(self, Ingredient_type: IngredientTypes, ingredient_semaphores: list):
-        super(SmokerModel, self).__init__()
+    def __init__(self, ingredient_type: IngredientTypes,
+                 production_semaphore: Semaphore, ingredient_semaphores: list[Semaphore]):
 
-        self.my_ingredient_type: IngredientTypes = IngredientTypes
+        super(SmokerModel, self).__init__()
+        self.production_semaphore = production_semaphore
+        self.my_ingredient_type: IngredientTypes = ingredient_type
+        self.ingredient_semaphores = ingredient_semaphores
+        self.name = self.my_ingredient_type.name
         self.status: SmokerStatus = SmokerStatus.RUNNING
-        self.ingredient_semaphores: list = ingredient_semaphores
 
     def run(self):
-        # intentar   adquirir  el semaforo de cada  uno de los ingredientes
-        #  si uno  de los semaforos no se  adquiere hayq  liberar  todos
-        # para prevenir el deadlock
-
-        ingredients_acquired = [False] * len(IngredientTypes)
-        ingredients_acquired[self.my_ingredient_type] = True
-
         while True:
+            # Intentar adquirir el semaforo de cada uno de lo ingredientes.
+            # Si uno de los semaforos se NO consigue bloquear se hay que
+            # liberar todos los adquiridios para prevenir el deadlock
+            # (hay otras estrategias pero esta es valida ...).
+            ingredients_acquired = [False] * len(IngredientTypes)
+            ingredients_acquired[self.my_ingredient_type.value] = True
 
-            #  conseguir los IngredientTypeses
+            # Bucle de bloqueo de ingredientes
             for ingredient_type in IngredientTypes:
                 if ingredient_type != self.my_ingredient_type:
-                    ingredient_acquired[ingredient_type] = self.ingredient_semaphores[ingredient_type].acquire(
-                        blocking=True, timeout=random.random())
+                    ingredients_acquired[ingredient_type.value] = \
+                        self.ingredient_semaphores[ingredient_type.value].acquire(
+                        block=True, timeout=random.random()*3)
 
-                # caso de no conseguir el bloqueo salimos del bloque  de bloqueo
-                if not ingredient_acquired[ingredient_type]:
-                    self.status = SmokerStatus[ingredient_type]
-                    break  # =====================>  salir del bloqueo
+                # Caso de no conseguir el bloqueo salimos del bucle de bloqueo
+                if not ingredients_acquired[ingredient_type.value]:
+                    self.status = SmokerStatus(ingredient_type.value)
+                    break  # ====== Salir del bucle de bloqueo de ingredientes ======>
 
-            # comprobar si todos los semaforos se adquirieron
-            if all(ingredient_acquired):
+            # Comprobar si todos los semaforos se han adquirido
+            if all(ingredients_acquired):
+                # Fumar
                 self.status = SmokerStatus.SMOKING
-                sleep(random.random()*2)
+                sleep(random.random() * 2)
+
+                # Desbloquear el productor
+                self.production_semaphore.release()
 
             else:
-                # desbloquear los semaforos
-                for ingredient_type, ingredient_acquired in enumerate(ingredients_acquired):
-                    if ingredient_acquired != self.my_ingredient_type:
+                # Desbloquear los semáforos de productos
+                for ingredient_type_value, ingredient_acquired in enumerate(ingredients_acquired):
+                    if ingredient_type != self.my_ingredient_type:
                         if ingredient_acquired:
-                            self.ingredient_semaphores[ingredient_type].release(
+                            self.ingredient_semaphores[ingredient_type_value].release(
                             )
 
             self.status = SmokerStatus.RUNNING
@@ -95,23 +100,32 @@ class SmokerModel(Process):
 
 class Controller():
     def __init__(self):
-        self.smokers: list = self.create_smokers()
-        self.production_semaphores: Semaphore = Semaphore(1)
-        self.ingredient_semaphores: list = self.create_smokers(
-            self.ingredient_semaphores)
-        self.provider: ProviderModel = ProviderModel(
-            self.ingredient_semaphores)
+        self.ingredient_semaphores: list[Semaphore] = \
+            self.create_ingredient_semaphores()
 
-    def create_smokers(self, ingredient_semaphores: list):
-        smokers = []
+        self.production_semaphore: Semaphore = Semaphore(1)
+
+        self.smokers: list[SmokerModel] = self.create_smokers(
+            self.production_semaphore, self.ingredient_semaphores)
+
+        self.provider: ProviderModel = ProviderModel(
+            self.production_semaphore, self.ingredient_semaphores)
+
+    def create_smokers(self, production_semaphore: Semaphore, ingredient_semaphores: list[Semaphore]) -> list():
+        smokers: list[SmokerStatus] = []
+
         for ingredient_type in IngredientTypes:
-            smokers.append(SmokerModel(ingredient_type))
+            smokers.append(SmokerModel(ingredient_type,
+                           production_semaphore, ingredient_semaphores))
+
         return smokers
 
-    def create_ingredients_semaphores(self):
+    def create_ingredient_semaphores(self) -> list():
         ingredients = []
+
         for ingredient_type in IngredientTypes:
             ingredients.append(Semaphore(0))
+
         return ingredients
 
     def start_smokers(self, smokers: list):
@@ -119,7 +133,10 @@ class Controller():
             smoker.start()
 
     def start(self):
+        print("Controller starting...")
+
         self.start_smokers(self.smokers)
+        self.provider.start()
 
 
 def smoker_callback():
@@ -131,8 +148,12 @@ def provider_callback():
 
 
 def main():
+    print("Starting simulation (main) ...")
+
     controller = Controller()
     controller.start()
+
+    print("Done simulation (main) ...")
 
 
 if __name__ == '__main__':
