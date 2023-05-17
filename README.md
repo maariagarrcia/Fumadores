@@ -1,5 +1,6 @@
 # Fumadores
 1) EXPLICACIÓN
+
 El problema de los fumadores es un problema clásico en la teoría de la concurrencia y la sincronización, que ilustra los desafíos y soluciones relacionados con la coordinación entre múltiples procesos en un sistema.
 
 Cada fumador debe esperar a tener los ingredientes necesarios para poder armar un cigarrillo. El agente tiene que facilitar la coordinación entre los fumadores asegurándose de que cada uno reciba los ingredientes adecuados en el momento oportuno.
